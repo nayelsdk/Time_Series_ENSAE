@@ -11,54 +11,65 @@ library(zoo)
 library(tseries)
 library(forecast)
 library(readr)
+library(seasonal)
+
 
 # # Load the data on personal computer (Sofia)
 # path <- "C:/Users/cianf/OneDrive/Documents/STL"
+# # Load the data on personnal computer (Nayel)
+path_donnees <- "/Users/nayelbenabdesadok/GitProjects/Time_Series_ENSAE/Partie_1_clean/CVSCJO.csv"
 # setwd(path)
-# getwd() 
-# list.files() 
+# getwd()
+# list.files()
 
 # path_donnees <- "C:/Users/cianf/OneDrive/Documents/STL/CVSCJO.csv"
 # data <- read_delim(path_donnees,";", escape_double = FALSE)
 
 
 # Load the data online
-path_donnees <- "/home/onyxia/work/Time_Series_ENSAE/Partie_1_clean/CVSCJO.csv"
 data <- read_delim(file = path_donnees, delim = ";", escape_double = FALSE, trim_ws = TRUE)
 
 # Clean the table
-data_all=data[4:425,]
-data_all$Codes<-NULL
-colnames(data_all)=c("Date_MY","IPI")
+data_all <- data[4:425, ]
+data_all$Codes <- NULL
+colnames(data_all) <- c("Date_MY", "IPI")
 
 
 # Converting date to the correct format
-data_all$Date<-as.Date(paste(data_all$Date_MY,1,sep="-"), format = "%Y-%m-%d")
-data_all$Date_MY<-NULL
+data_all$Date <- as.Date(paste(data_all$Date_MY, 1, sep = "-"), format = "%Y-%m-%d")
+data_all$Date_MY <- NULL
 
-# Extracting month and year from date 
-Year=as.numeric(format(data_all$Date, format = "%Y"))
-Month=format(data_all$Date, format = "%m")
-data_all=cbind(data_all,Year,Month)
-data_all$Year<-as.numeric(data_all$Year)
-data_all$IPI<-as.numeric(data_all$IPI)
+# Extracting month and year from date
+Year <- as.numeric(format(data_all$Date, format = "%Y"))
+Month <- format(data_all$Date, format = "%m")
+data_all <- cbind(data_all, Year, Month)
+data_all$Year <- as.numeric(data_all$Year)
+data_all$IPI <- as.numeric(data_all$IPI)
 sort(data_all$IPI)
-data_all<-data_all[order(data_all$Date),] 
-rownames(data_all) <- seq(length=nrow(data_all)) 
+data_all <- data_all[order(data_all$Date), ]
+rownames(data_all) <- seq(length = nrow(data_all))
 
 
 # Create a time series for easier analysis, and plot
-Xt.ts<-ts(data_all$IPI,start=c(1990,1), end=c(2025,2), frequency=12)
-par(mfrow=c(1,1))
-plot.ts(Xt.ts, xlab="Years", ylab="IPI (CVS-CJO)")
+Xt.ts <- ts(data_all$IPI, start = c(1990, 1), end = c(2025, 2), frequency = 12)
+par(mfrow = c(1, 1))
+plot.ts(Xt.ts, xlab = "Years", ylab = "IPI (CVS-CJO)")
 
+#==============================================================================#
+# The dates range from January 1990 (1990m1) to February 2025 (2025m2) as shown above. 
+# At first glance, we suspect that the series is non-stationary and that there is a breakpoint
+# around January 2009. Let's first observe the entire series and then apply the necessary transformations.
+#==============================================================================#
+png("acf_Xts.png")
+acf(Xt.ts, main = "")
+dev.off()
 
-####### - Part 1 : Preliminary Analysis - ######
+####### - Part 1 :The Data - ######
 
-####### - Part 1.1 : Trend/Cycle/Seasonal Decomposition - ######
+####### - Part 1.1 : Trend/Cycle/Seasonal Decomposition (What does the chosen series represent ?)- ######
 
 # Decomposing data into seasonal + trend + random
-decompose_Xt = decompose(Xt.ts,"additive")
+decompose_Xt <- decompose(Xt.ts, "additive")
 
 plot(as.ts(decompose_Xt$seasonal))
 plot(as.ts(decompose_Xt$trend))
@@ -79,9 +90,9 @@ Xt_diff1 <- diff(Xt.ts)
 # 3. Plot differenced series
 plot(Xt_diff1, type = "l")
 
-# 4. Check stationarity 
+# 4. Check stationarity
 # With Augmented Dickey-Fuller Test (ADF)
-adf <- adfTest(Xt.ts, lag=1, type="ct") #
+adf <- adfTest(Xt.ts, lag = 1, type = "ct") #
 adf
 # With Philipps-Perron Test (PP)
 pp.test(Xt_diff1)
@@ -92,7 +103,7 @@ print(kpss_test)
 
 
 ## We then save ACF plot
-png("acf_plot_Xt.png")  
+png("acf_plot_Xt.png")
 acf(Xt_diff1, main = "")
 dev.off()
 
@@ -104,17 +115,17 @@ dev.off()
 
 # As we find a noticeable change in the data before and after January 2009,
 # We split the data into two subsets of the time series
-Xt1 <- window(Xt.ts, end=c(2008, 12))
-Xt2 <- window(Xt.ts, start=c(2009, 1))
+Xt1 <- window(Xt.ts, end = c(2008, 12))
+Xt2 <- window(Xt.ts, start = c(2009, 1))
 
 # And plot them
-plot.ts(Xt1, xlab="Years", ylab="IPI",main="1990-2008")
-plot.ts(Xt2, xlab="Years", ylab="IPI",main="2009-2025")
+plot.ts(Xt1, xlab = "Years", ylab = "IPI", main = "1990-2008")
+plot.ts(Xt2, xlab = "Years", ylab = "IPI", main = "2009-2025")
 
 
 ####### - Part 1.3 : Tranforming Xt1 - ######
 
-decompose_Xt1 = decompose(Xt1,"additive")
+decompose_Xt1 <- decompose(Xt1, "additive")
 
 plot(as.ts(decompose_Xt1$seasonal))
 plot(as.ts(decompose_Xt1$trend))
@@ -129,14 +140,14 @@ par(mfrow = c(2, 1))
 plot(Xt1)
 
 # 2. First difference to remove trend
-Xt1_diff1 <- Xt.ts
+Xt1_diff1 <- diff(Xt1)
 
 # 3. Plot differenced series
 plot(Xt1_diff1)
 
-# 4. Check stationarity 
+# 4. Check stationarity
 # With Augmented Dickey-Fuller Test (ADF)
-adf <- adfTest(Xt1_diff1, lag=14, type="ct") #
+adf <- adfTest(Xt1_diff1, lag = 14, type = "ct") #
 adf
 # With Philipps-Perron Test (PP)
 pp.test(Xt1_diff1)
@@ -147,7 +158,7 @@ print(kpss_test)
 
 
 
-## We then print ACF 
+## We then print ACF
 png("acf_plot_Xt1.png")
 acf(Xt1_diff1, main = "")
 dev.off()
@@ -159,7 +170,7 @@ dev.off()
 
 ####### - Part 1.4 : Tranforming Xt2 - ######
 
-decompose_Xt2 = decompose(Xt2,"additive")
+decompose_Xt2 <- decompose(Xt2, "additive")
 
 plot(as.ts(decompose_Xt2$seasonal))
 plot(as.ts(decompose_Xt2$trend))
@@ -178,7 +189,7 @@ Xt2_diff1 <- diff(Xt2)
 # 3. Plot differenced series
 plot(Xt2_diff1, main = "Differenced Series", type = "l")
 
-# 4. Check stationarity 
+# 4. Check stationarity
 # With Augmented Dickey-Fuller Test (ADF)
 adf <- adfTest(Xt2_diff1, lag = 14, type = "ct")
 adf
@@ -192,8 +203,8 @@ print("KPSS Test Results:")
 print(kpss_test)
 
 
-## We then print ACF 
-png("acf_plot_Xt2.png") 
+## We then print ACF
+png("acf_plot_Xt2.png")
 acf(Xt2_diff1, main = "")
 dev.off()
 
@@ -218,3 +229,17 @@ plot(Xt2_diff1, main = "Xt2_diff1")
 
 # Close the graphics device
 dev.off()
+
+
+# White noise verification for Xt1_diff1 and Xt2_diff1
+
+# Xt1_diff1
+model_Xt1 <- auto.arima(Xt1_diff1, stationary = TRUE, seasonal = FALSE)
+checkresiduals(model_Xt1)  # Residuals ACF + Ljung-Box test
+Box.test(residuals(model_Xt1), lag = 20, type = "Ljung-Box")  # Manual Ljung-Box test
+
+# Xt2_diff1
+model_Xt2 <- auto.arima(Xt2_diff1, stationary = TRUE, seasonal = FALSE)
+checkresiduals(model_Xt2)  # Residuals ACF + Ljung-Box test
+Box.test(residuals(model_Xt2), lag = 20, type = "Ljung-Box")  # Manual Ljung-Box test
+
