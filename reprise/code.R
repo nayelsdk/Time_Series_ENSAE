@@ -16,6 +16,7 @@ library(RColorBrewer)
 library(gridExtra)
 library(astsa)
 library(tsoutliers)
+library(ellipse)
 
 # # Load the data on personal computer (Sofia)
 # path <- "C:/Users/cianf/OneDrive/Documents/STL"
@@ -228,12 +229,29 @@ print(kpss_result_diff)
 # centered series confirm stationarity (p-values all in favor).
 # Conclusion: The original series is integrated of order 1 (I(1)).
 #==============================================================================#
+####### - Part 1.3 : Before/after Stationarity ######
 
+png("Xt_vs_diffXt.png", width = 1000, height = 300)
+par(mfrow = c(1, 2))  
 
+plot.ts(Xt.ts,
+        main = expression("Original Series " ~ X[t]),
+        ylab = "IPI Construction",
+        xlab = "Time",
+        lwd = 2,
+        col = "steelblue")
 
+plot.ts(diff(Xt.ts),
+        main = expression("Differenced Series " ~ Y[t] == Delta * X[t]),
+        ylab = "Differenced IPI",
+        xlab = "Time",
+        lwd = 2,
+        col = "darkorange")
+
+dev.off()
 ####### - Part 2 : ARMA Models ######
 
-####### - Part 2.1 : Pick p and q ######
+####### - Part 2.4 : Pick p and q ######
 
 
 acf_diff_plot <- ggAcf(diff_Xt_centered, lag.max = 40, plot = TRUE) +
@@ -354,13 +372,116 @@ print(info_criteria)
 
 # ARMA (1,1) is choosen ! 
 
-####### - Part 2.2 : Taking outliers into account  ######
+####### - Part 2.5 : Taking outliers into account  #######
 
-outlier_result <- tso(Xt.ts, types = c("AO", "LS", "TC","IO"))
-summary(outlier_result)
-outlier_result$outliers
-png("outliers_plot.png", width = 800, height = 600)
+# Detect the outliers
+arima111 <- arima(Xt.ts, order = c(1, 1, 1))
+outlier_result <- tso(Xt.ts, types = c("AO", "LS", "TC", "IO"),
+                      tsmethod = "arima", args.tsmethod = list(order = c(1, 1, 1)))
+all_outliers <- outlier_result$outliers
+print(all_outliers)
+
+#==============================================================================#
+# A total of 10 outliers are detected: 8 additive outliers (AO) and 2 transient changes (TC).
+# The last outlier, however, does not correspond to any visually identifiable shock in the series.
+# Therefore, we retain only the first 9 outliers for the adjustment.
+# We then correct the series accordingly using the corresponding estimated effects.
+#==============================================================================#
+
+selected_indices <- head(all_outliers$ind, 9)
+adjusted_effects <- outlier_result$effects
+keep_positions <- rep(FALSE, length(adjusted_effects))
+keep_positions[selected_indices] <- TRUE
+adjusted_effects[!keep_positions] <- 0
+
+yadj_9out <- Xt.ts - adjusted_effects
+
+final_model_9out <- arima(yadj_9out, order = c(1, 1, 1))
+summary(final_model_9out)
+# AIC = 2395.14 < 2432.691  (AIC of the initial model) --> improvement confirmed
+
+png("outliers_plot_full.png", width = 800, height = 600)
 plot(outlier_result)
 dev.off()
+
+
+
+####### - Part III — Forecasting ######
+
+####### - Part 3.6 : X_T+1 and X_T+2  #######
+forecast_2 <- forecast(final_model_9out, h = 2)
+print(forecast_2)
+
+#==============================================================================
+# Point Forecast     80% CI                  95% CI
+#------------------------------------------------------------------------------
+# Mar 2025:  93.86069   [88.56977 ; 99.15160]   [85.76894 ; 101.95240]
+# Apr 2025:  93.86615   [88.06500 ; 99.66730]   [84.99406 ; 102.73820]
+#==============================================================================#
+
+
+#===========================#
+# Zoom Forecast Plot (Last 36 Months)
+#===========================#
+
+start_zoom <- time(yadj_9out)[length(yadj_9out) - 35]
+end_zoom <- time(forecast_2$mean)[2]
+recent_values <- window(yadj_9out, start = start_zoom)
+forecast_values <- forecast_2$mean
+forecast_lower <- forecast_2$lower[,2]  # 95% CI
+forecast_upper <- forecast_2$upper[,2]  # 95% CI
+
+y_min <- min(recent_values, forecast_lower)
+y_max <- max(recent_values, forecast_upper)
+
+png("forecast_zoom_adjusted.png", width = 1000, height = 600)
+autoplot(forecast_2, series = "Forecast") +
+  autolayer(recent_values, series = "Observed", color = "black") +
+  ggtitle("Two-Step Forecast: Last 36 Months (Zoom)") +
+  ylab("IPI Construction (Corrected Series)") +
+  xlab("Time") +
+  coord_cartesian(xlim = c(start_zoom, end_zoom), ylim = c(y_min, y_max)) +
+  scale_color_manual(name = "Series",
+                     values = c("Observed" = "black", "Forecast" = "blue")) +
+  theme_minimal(base_size = 14)
+dev.off()
+
+
+####### - Part 3.8 : Confidence Region  #######
+
+phi <- coef(final_model_9out)["ar1"]
+theta <- coef(final_model_9out)["ma1"]
+sigma2 <- final_model_9out$sigma2
+
+sigma_g1 <- sqrt(sigma2)
+sigma_g2 <- sqrt(sigma2 * (1 + (1 + phi - theta)^2))
+rho <- sigma2 * (1 + phi - theta)
+
+Sigma <- matrix(c(sigma_g1^2, rho,
+                  rho, sigma_g2^2), nrow = 2)
+
+centre <- c(forecast_2$mean[1], forecast_2$mean[2])
+
+ell <- ellipse(Sigma, centre = centre, level = 0.95, npoints = 1000)
+
+png("confidence_ellipse_forecast.png", width = 800, height = 600)
+plot(ell,
+     type = 'l',
+     xlab = expression(hat(X)[T+1]),
+     ylab = expression(hat(X)[T+2]),
+     main = "95% Confidence Ellipse for Two-Step Forecast")
+points(x = centre[1], y = centre[2], pch = 19, col = "red", cex = 1.5)
+grid()
+dev.off()
+
+
+
+
+
+
+
+
+
+
 
 
