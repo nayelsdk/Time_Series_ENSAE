@@ -453,46 +453,39 @@ print(forecast_2)
 # Zoom Forecast Plot (Last 36 Months)
 #===========================#
 
-# Define zoom window
-start_zoom <- time(yadj_9out)[length(yadj_9out) - 35]  # 36 months back
-end_zoom <- time(forecast_2$mean)[2]                   # T+2 forecast point
+start_zoom <- time(yadj_9out)[length(yadj_9out) - 35]
+end_zoom <- time(forecast_2$mean)[2]
 
-# Extract the recent observed values (last 36 months)
 recent_values <- window(yadj_9out, start = start_zoom)
-
-# Extract forecast components (mean + 95% CI)
 forecast_values <- forecast_2$mean
-forecast_lower <- forecast_2$lower[, 2]  # 95% CI
-forecast_upper <- forecast_2$upper[, 2]
+forecast_lower <- forecast_2$lower[,2]  # 95% CI
+forecast_upper <- forecast_2$upper[,2]  # 95% CI
 
-# Combine observed and forecast series for a continuous timeline
-combined <- ts(c(recent_values, forecast_values),
-               start = start_zoom,
-               frequency = frequency(yadj_9out))
-
-lower_combined <- ts(c(rep(NA, length(recent_values)), forecast_lower),
-                     start = start_zoom,
-                     frequency = frequency(yadj_9out))
-
-upper_combined <- ts(c(rep(NA, length(recent_values)), forecast_upper),
-                     start = start_zoom,
-                     frequency = frequency(yadj_9out))
-
-# Define y-axis limits
 y_min <- min(recent_values, forecast_lower)
 y_max <- max(recent_values, forecast_upper)
 
-# Plot
-png("forecast_zoom_adjusted.png", width = 1000, height = 600)
+# Get the last observed point and first forecast point 
+# Then create a line between them, as autoplot does not do this automatically.
+last_obs_time <- time(tail(recent_values, 1))
+last_obs_value <- tail(recent_values, 1)
+first_fc_time <- time(forecast_values)[1]
+first_fc_value <- forecast_values[1]
+connect_df <- data.frame(
+  Time = c(last_obs_time, first_fc_time),
+  Value = c(last_obs_value, first_fc_value)
+)
 
-autoplot(combined, series = "Forecast") +
+# Plot, including the  connecting line
+png("forecast_zoom_adjusted.png", width = 1000, height = 600)
+autoplot(forecast_2, series = "Forecast") +
   autolayer(recent_values, series = "Observed", color = "black") +
-  autolayer(lower_combined, series = "Lower 95%", linetype = "dashed", color = "blue") +
-  autolayer(upper_combined, series = "Upper 95%", linetype = "dashed", color = "blue") +
+  geom_line(data = connect_df, aes(x = Time, y = Value), linetype = "solid", color = "black") +
   ggtitle("Two-Step Forecast: Last 36 Months (Zoom)") +
   ylab("IPI Construction (Corrected Series)") +
   xlab("Time") +
   coord_cartesian(xlim = c(start_zoom, end_zoom), ylim = c(y_min, y_max)) +
+  scale_color_manual(name = "Series",
+                     values = c("Observed" = "black", "Forecast" = "blue")) +
   theme_minimal(base_size = 14)
 dev.off()
 
