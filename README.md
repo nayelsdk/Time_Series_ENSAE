@@ -1,7 +1,5 @@
 # Linear Time Series
 
-## Introduction
-
 This project analyzes the time series of the Industrial Production Index (IPI) for the construction sector in France (Section F of the NAF classification), covering the period from January 1990 to February 2025. The goal is to model and forecast the series using ARMA/ARIMA models while addressing issues such as non-stationarity, outliers, and external shocks.
 
 The GitHub repository is organized as follows:
